@@ -2,7 +2,7 @@
 
 ## Description
 
-Briefly describe your project here. What does it do? What problem does it solve? What are its main features?
+This project fetches pull request data from a GitHub repository, stores it in a SQLite database, and includes a column for associated labels.
 
 ## Getting Started
 
@@ -10,7 +10,8 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-*   **Docker Desktop:** This includes Docker Engine and Docker Compose. You can download it from the official Docker website: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+*   **Python 3.x:** Ensure you have Python installed.
+*   **Git:** For cloning the repository.
 
 ### Installation
 
@@ -20,95 +21,108 @@ These instructions will get you a copy of the project up and running on your loc
     cd Big-Data-project
     ```
 
-2.  **Ensure required files are present:**
-    Make sure you have the following files in your project's root directory:
-    *   `docker-compose.yml`: Defines the PostgreSQL and pgAdmin services.
-    *   `db/init.sql`: (Optional, but recommended for initial table creation) A SQL script that runs when the PostgreSQL container starts for the first time.
-    *   `pull_requests_db_backup.sql`: The database backup file you want to restore.
-
-    Your directory structure should look something like this:
-
-    ```
-    your_project_folder/
-    ├── docker-compose.yml
-    ├── pull_requests_db_backup.sql
-    └── db/
-        └── init.sql
+2.  **Install Python dependencies:**
+    ```bash
+    pip install -r requirements.txt
     ```
 
-## Database Setup and Restoration
+3.  **Set up your GitHub Personal Access Token:**
+    To fetch data from GitHub, you need a Personal Access Token (PAT). Create one by following these steps:
+    *   Go to [GitHub Developer Settings](https://github.com/settings/tokens).
+    *   Click on "Generate new token" (or "Generate new token (classic)").
+    *   Give your token a descriptive name (e.g., "Big-Data-project-PR-Fetcher").
+    *   Grant the `repo` scope (or at least `public_repo` if it's a public repository). You might need `repo` for private repositories or full access.
+    *   Click "Generate token" and **copy the token immediately**. You won't be able to see it again.
 
-This section provides instructions on how to set up the PostgreSQL and pgAdmin services using Docker Compose, and then restore the `pull_requests_db` database from a backup file.
+    Create a file named `.env` in the root directory of your project (where `fetch_and_store_prs.py` is located) and add your token like this:
 
-### 1. Start Docker Services
-
-Navigate to the directory containing your `docker-compose.yml` file in your terminal and run the following command to start the PostgreSQL and pgAdmin containers:
-
-```bash
-docker-compose up -d
-```
-
-*   `docker-compose up`: Starts the services defined in `docker-compose.yml`.
-*   `-d`: Runs the services in detached mode (in the background).
-
-This will download the necessary Docker images (if not already present) and start the `postgres` and `pgadmin` containers.
-
-### 2. Verify Containers Are Running
-
-You can check if the containers are running correctly with this command:
-
-```bash
-docker-compose ps
-```
-
-You should see both `postgres_db` and `pgadmin` containers listed with a `State` of `Up`.
-
-### 3. Restore the Database from Backup
-
-Once the `postgres` container is up and running, you can restore your database using the `psql` command. Make sure your `pull_requests_db_backup.sql` file is in the same directory where you run this command.
-
-```bash
-docker-compose exec -T postgres psql -U user pull_requests_db < pull_requests_db_backup.sql
-```
-
-Let's break down this command:
-
-*   `docker-compose exec postgres`: Executes a command inside the `postgres` service container.
-*   `-T`: Disables pseudo-TTY allocation. This is useful when piping input.
-*   `psql`: The PostgreSQL command-line client.
-*   `-U user`: Specifies the PostgreSQL username (`user` is defined in `docker-compose.yml`).
-*   `pull_requests_db`: Specifies the database name to connect to (also defined in `docker-compose.yml`).
-*   `< pull_requests_db_backup.sql`: Redirects the content of your backup file as input to the `psql` command, effectively executing all the SQL commands in the backup file to restore the database.
-
-### 4. Access pgAdmin (Optional Verification)
-
-You can use pgAdmin to visually verify that your database has been restored successfully.
-
-1.  Open your web browser and navigate to `http://localhost:9099`.
-2.  Log in to pgAdmin using the default credentials:
-    *   **Email:** `pgadmin@example.com`
-    *   **Password:** `admin`
-3.  If you haven't already, add a new server connection:
-    *   Right-click on "Servers" -> "Create" -> "Server...".
-    *   **General Tab:**
-        *   **Name:** `PostgreSQL Local` (or any name you prefer)
-    *   **Connection Tab:**
-        *   **Host name/address:** `postgres`
-        *   **Port:** `5432`
-        *   **Maintenance database:** `pull_requests_db`
-        *   **Username:** `user`
-        *   **Password:** `password`
-    *   Click "Save".
-4.  Once connected, expand the `pull_requests_db` database and its schemas to see the tables and data that have been restored.
+    ```
+    GITHUB_TOKEN=your_personal_access_token_here
+    ```
+    **Replace `your_personal_access_token_here` with the actual token you copied from GitHub.**
 
 ## Usage
 
-Provide instructions on how to use your application once it's set up. For example:
+To fetch pull requests and populate the SQLite database:
 
 ```bash
-# Run your main application command
-python main.py
+python fetch_and_store_prs.py
 ```
+
+This will create a `pull_requests.db` file in your project directory containing the fetched data.
+
+## Viewing the Database
+
+You can inspect the `pull_requests.db` SQLite database using the `sqlite3` command-line tool.
+
+1.  **Open the database:**
+    Navigate to your project's root directory in your terminal and run:
+    ```bash
+    sqlite3 pull_requests.db
+    ```
+    You will see the `sqlite>` prompt.
+
+2.  **List tables:**
+    At the `sqlite>` prompt, type:
+    ```sql
+    .tables
+    ```
+    You should see `labels`, `pull_requests`, and `pull_request_labels`.
+
+3.  **View table schema:**
+    To see the schema of a specific table (e.g., `pull_requests`):
+    ```sql
+    .schema pull_requests
+    .schema labels
+    .schema pull_request_labels
+    ```
+
+4.  **Query data (example):**
+    To see some pull requests:
+    ```sql
+    SELECT number, title, user_login FROM pull_requests LIMIT 5;
+    ```
+    To see labels for a specific pull request (e.g., PR number 123, replace with an actual PR number):
+    ```sql
+    SELECT
+        pr.number,
+        pr.title,
+        l.id AS label_name
+    FROM
+        pull_requests pr
+    JOIN
+        pull_request_labels prl ON pr.id = prl.pr_id
+    JOIN
+        labels l ON prl.label_id = l.id
+    WHERE
+        pr.number = 123; -- Replace 123 with an actual pull request number
+    ```
+
+    To exit the SQLite prompt, type `.quit` and press Enter.
+
+## Database Structure
+
+The `pull_requests.db` SQLite database now uses a normalized schema with three tables:
+
+*   **`pull_requests` table**
+    *   `id`: Unique ID of the pull request.
+    *   `number`: The pull request number.
+    *   `title`: The title of the pull request.
+    *   `user_login`: The GitHub login of the user who created the pull request.
+    *   `state`: The current state of the pull request (e.g., 'open', 'closed').
+    *   `created_at`: Timestamp when the pull request was created.
+    *   `updated_at`: Timestamp when the pull request was last updated.
+    *   `closed_at`: Timestamp when the pull request was closed.
+    *   `merged_at`: Timestamp when the pull request was merged.
+    *   `html_url`: The URL to the pull request on GitHub.
+
+*   **`labels` table**
+    *   `id`: The unique name of the label (e.g., 'bug', 'enhancement').
+
+*   **`pull_request_labels` table (Junction Table)**
+    *   `pr_id`: Foreign key referencing the `id` from the `pull_requests` table.
+    *   `label_id`: Foreign key referencing the `id` (label name) from the `labels` table.
+    *   This table manages the many-to-many relationship between pull requests and labels.
 
 ## Running Tests
 
