@@ -111,22 +111,18 @@ services:
   spark_batch_job:
     build:
       context: .
-      dockerfile: Dockerfile.python
+      dockerfile: Dockerfile.spark
     container_name: spark_batch_job
-    # This service is for running the batch job manually or via a scheduler.
-    # It won't run automatically with `docker compose up` unless you change the command.
-    # To run it, you would use: docker compose run spark_batch_job python spark/spark-bacth-job.py
-    command: bash spark/run_hourly_job.sh
-    depends_on:
-      - mongodb # Spark job reads from MongoDB
-    environment:
-      MONGO_SPARK_INPUT_URI: mongodb://mongodb:27017/github.raw_prs
-      MONGO_SPARK_OUTPUT_URI: mongodb://mongodb:27017/github.analytics
-      SPARK_LOCAL_IP: spark_batch_job # Helps Spark resolve hostname in Docker network
-      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.1"
     volumes:
-      - spark_logs:/opt/spark/work
-    mem_limit: 1024m
+      - ./spark:/app/spark
+      - spark_logs:/opt/bitnami/spark/logs
+    environment:
+      PYTHONUNBUFFERED: 1
+      MONGO_URL: mongodb://mongodb:27017/
+      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:10.5.0 --conf spark.mongodb.input.uri=mongodb://mongodb:27017/github.raw_prs --conf spark.mongodb.output.uri=mongodb://mongodb:27017/github.analytics"
+    depends_on:
+      - kafka_broker
+      - mongodb
 
 volumes:
   mongodb_data:

@@ -1,10 +1,20 @@
-FROM python:3.10-slim-buster
+FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 
+# Install Java for Spark and wget
+# RUN apt-get update && apt-get install -y openjdk-17-jre-headless wget && rm -rf /var/lib/apt/lists/*
+# ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# ENV PATH=$PATH:$JAVA_HOME/bin
+
+# Ensure Spark jars directory exists
+# RUN mkdir -p /usr/local/lib/python3.10/site-packages/pyspark/jars/
+
+# Download and install MongoDB Spark Connector
+# RUN wget https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.12/10.5.0/mongo-spark-connector_2.12-10.5.0-all.jar \
+#     -O /usr/local/lib/python3.10/site-packages/pyspark/jars/mongo-spark-connector_2.12-10.5.0-all.jar
+
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=120 -r requirements.txt
 
 COPY . .
-
-# Removed: ENTRYPOINT ["python"] 

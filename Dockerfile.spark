@@ -1,0 +1,18 @@
+FROM bitnami/spark:3.5.1
+
+WORKDIR /app
+
+# Copy requirements.txt and install Python dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy Spark application files
+COPY spark/spark-batch-job.py /app/spark/spark-batch-job.py
+COPY spark/run_hourly_job.sh /app/spark/run_hourly_job.sh
+
+# Set environment variables for Spark (if needed, but bitnami/spark often handles this)
+ENV SPARK_HOME=/opt/bitnami/spark
+ENV PATH=$PATH:$SPARK_HOME/bin
+
+# Use the run_hourly_job.sh script as the entrypoint
+CMD ["/bin/bash", "/app/spark/run_hourly_job.sh"] 

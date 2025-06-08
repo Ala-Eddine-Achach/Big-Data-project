@@ -1,3 +1,4 @@
+import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, unix_timestamp, avg, count, hour, date_format
 import os
@@ -5,16 +6,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_SPARK_INPUT_URI = os.getenv("MONGO_SPARK_INPUT_URI", "mongodb://localhost:27017/github.raw_prs")
-MONGO_SPARK_OUTPUT_URI = os.getenv("MONGO_SPARK_OUTPUT_URI", "mongodb://localhost:27017/github.analytics")
+if len(sys.argv) > 1:
+    mongo_url = sys.argv[1]
+else:
+    # Fallback to environment variable if not provided as argument (though argument is preferred)
+    mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017/") 
 
 spark = SparkSession.builder \
     .appName("GitHubPRBatchJob") \
-    .config("spark.mongodb.input.uri", MONGO_SPARK_INPUT_URI) \
-    .config("spark.mongodb.output.uri", MONGO_SPARK_OUTPUT_URI) \
+    .config("spark.mongodb.input.uri", f"{mongo_url}github.raw_prs") \
+    .config("spark.mongodb.output.uri", f"{mongo_url}github.analytics") \
     .getOrCreate()
 
-df = spark.read.format("mongo").load()
+df = spark.read.format("mongodb")\
+    .load()
+print(f"INFO: Number of documents read from raw_prs: {df.count()}", flush=True)
 
 df_merged = df.filter(col("merged_at").isNotNull())
 
@@ -31,7 +37,10 @@ agg = df_merged.groupBy("weekday", "slot").agg(
     count("*").alias("merged_count"),
     avg("merge_time_hours").alias("avg_merge_time_hours")
 )
+print(f"INFO: Number of documents in aggregated DataFrame: {agg.count()}", flush=True)
 
-agg.write.format("mongo").mode("overwrite").save()
+agg.write.format("mongodb")\
+    .mode("overwrite")\
+    .save()
 
 spark.stop()
