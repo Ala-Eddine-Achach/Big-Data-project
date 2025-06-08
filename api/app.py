@@ -81,4 +81,4 @@ def test_disconnect():
 if __name__ == '__main__':
     # Start the MongoDB change stream monitor in a separate thread
     threading.Thread(target=monitor_mongo_changes, daemon=True).start()
-    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True) 
+    socketio.run(app, host='0.0.0.0', port=5050, allow_unsafe_werkzeug=True) 
