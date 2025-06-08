@@ -2,24 +2,120 @@ version: '3.8'
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
+    image: zookeeper:3.8
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
     environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888
 
-  kafka:
-    image: confluentinc/cp-kafka:7.3.0
+  kafka_broker:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka_broker
+    ports:
+      - "9092:9092"
+      - "9093:9093" # For inter-broker communication / external access
     depends_on:
       - zookeeper
     environment:
+      KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_broker:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
   mongodb:
-    image: mongo:5
+    image: mongo:6.0
+    container_name: mongodb
     ports:
       - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db # Persist MongoDB data
+    command: ["--replSet", "rs0", "--bind_ip_all"]
 
-  # Optional: Add Spark and your dashboard as containers if needed
+  github_pr_producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: github_pr_producer
+    command: python kafka/github_pr_producer.py
+    depends_on:
+      - kafka_broker
+    environment:
+      # Pass environment variables from host's .env file
+      - GITHUB_TOKEN
+      - OWNER
+      - REPO
+      - KAFKA_TOPIC
+      - KAFKA_SERVER
+
+  kafka_to_mongo_consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: kafka_to_mongo_consumer
+    command: python kafka/kafka_to_mongo_consumer.py
+    depends_on:
+      - kafka_broker
+      - mongodb
+    environment:
+      # Kafka and MongoDB variables are hardcoded in consumer.py
+      # No need to pass them from .env here unless you change the consumer to read them.
+      - KAFKA_TOPIC
+      - KAFKA_SERVER
+      - MONGO_URL
+      - DB_NAME
+      - COLLECTION
+
+  backend_api:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: backend_api
+    command: python api/app.py
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL
+      - DB_NAME
+      - COLLECTION
+      - RAW_PRS_COLLECTION
+      - FLASK_SECRET_KEY
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: dashboard
+    ports:
+      - "8080:80" # Map container port 80 to host port 8080
+    depends_on:
+      - backend_api # Dashboard relies on the backend API for data
+
+  spark_batch_job:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: spark_batch_job
+    # This service is for running the batch job manually or via a scheduler.
+    # It won't run automatically with `docker compose up` unless you change the command.
+    # To run it, you would use: docker compose run spark_batch_job python spark/spark-bacth-job.py
+    command: ["sleep", "infinity"] # Keep container alive without running the job automatically
+    depends_on:
+      - mongodb # Spark job reads from MongoDB
+    environment:
+      MONGO_SPARK_INPUT_URI: ${MONGO_SPARK_INPUT_URI}
+      MONGO_SPARK_OUTPUT_URI: ${MONGO_SPARK_OUTPUT_URI}
+      SPARK_LOCAL_IP: spark_batch_job # Helps Spark resolve hostname in Docker network
+      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:${SPARK_MONGO_CONNECTOR_VERSION}"
+    volumes:
+      - spark_logs:/opt/spark/work
+
+volumes:
+  mongodb_data:
+  spark_logs:

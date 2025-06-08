@@ -2,4 +2,7 @@ python-dotenv==1.0.0
 requests==2.32.3
 kafka-python==2.0.2
 pymongo==4.7.3
-pyspark==3.5.1 
+pyspark==3.5.1
+flask==3.0.3
+flask-socketio==5.3.6
+eventlet==0.33.3 # or gevent 
