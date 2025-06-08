@@ -1,3 +1,5 @@
-psycopg2-binary
-requests
-python-dotenv 
+python-dotenv==1.0.0
+requests==2.32.3
+kafka-python==2.0.2
+pymongo==4.7.3
+pyspark==3.5.1 
