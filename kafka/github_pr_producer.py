@@ -1,6 +1,6 @@
 import requests
 import time
-from kafka import KafkaProducer
+from kafka import KafkaProducer, errors
 import json
 import os
 from datetime import datetime
@@ -16,24 +16,22 @@ KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "github-prs-topic")
 KAFKA_SERVER = os.getenv("KAFKA_SERVER", "kafka_broker:29092")
 
 producer = None
-max_retries = 10
 retry_delay_seconds = 5
 
-for i in range(max_retries):
+while True:
     try:
         producer = KafkaProducer(
             bootstrap_servers=[KAFKA_SERVER],
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
-        print(f"INFO: Successfully connected to Kafka after {i+1} attempts.")
+        print("INFO: Successfully connected to Kafka.")
         break
+    except errors.NoBrokersAvailable:
+        print(f"WARNING: Kafka not available, retrying in {retry_delay_seconds} seconds...")
+        time.sleep(retry_delay_seconds)
     except Exception as e:
-        print(f"WARNING: Failed to connect to Kafka (attempt {i+1}/{max_retries}): {e}")
-        if i < max_retries - 1:
-            time.sleep(retry_delay_seconds)
-        else:
-            print("ERROR: Exceeded maximum Kafka connection retries. Exiting.")
-            exit(1)
+        print(f"ERROR: An unexpected error occurred during Kafka connection: {e}. Exiting.")
+        exit(1)
 
 headers = {
     "Authorization": f"token {GITHUB_TOKEN}",
