@@ -48,7 +48,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: github_pr_producer
-    command: kafka/github_pr_producer.py
+    command: python kafka/github_pr_producer.py
     depends_on:
       - kafka_broker
     environment:
@@ -58,13 +58,14 @@ services:
       KAFKA_TOPIC: github-prs-topic
       KAFKA_SERVER: kafka_broker:29092
       PYTHONUNBUFFERED: 1
+    mem_limit: 512m
 
   kafka_to_mongo_consumer:
     build:
       context: .
       dockerfile: Dockerfile.python
     container_name: kafka_to_mongo_consumer
-    command: bash -c "sleep 30 && python kafka/kafka_to_mongo_consumer.py"
+    command: ["bash", "-c", "sleep 30 && python kafka/kafka_to_mongo_consumer.py"]
     depends_on:
       - kafka_broker
       - mongodb
@@ -74,6 +75,8 @@ services:
       MONGO_URL: mongodb://mongodb:27017
       DB_NAME: github
       COLLECTION: raw_prs
+      PYTHONUNBUFFERED: 1
+    mem_limit: 512m
 
   backend_api:
     build:
@@ -91,6 +94,7 @@ services:
       COLLECTION: analytics
       RAW_PRS_COLLECTION: raw_prs
       FLASK_SECRET_KEY: YOUR_VERY_STRONG_RANDOM_SECRET_KEY
+    mem_limit: 512m
 
   dashboard:
     build:
@@ -122,6 +126,7 @@ services:
       SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.1"
     volumes:
       - spark_logs:/opt/spark/work
+    mem_limit: 1024m
 
 volumes:
   mongodb_data:

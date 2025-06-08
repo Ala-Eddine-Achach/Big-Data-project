@@ -47,11 +47,15 @@ while True:
         print(f"ERROR: An unexpected error occurred during Kafka consumer connection: {e}. Exiting.")
         exit(1)
 
+print("INFO: Starting to consume messages from Kafka...")
+
 for message in consumer:
+    print(f"INFO: Received message from Kafka for PR: {message.value.get('number', 'N/A')}")
     pr = message.value
+    print(f"INFO: Attempting to upsert PR #{pr['number']} into MongoDB.")
     coll.update_one(
         {"number": pr["number"]},
         {"$set": pr},
         upsert=True
     )
-    print(f"Upserted PR #{pr['number']} into MongoDB")
+    print(f"INFO: Upserted PR #{pr['number']} into MongoDB")
