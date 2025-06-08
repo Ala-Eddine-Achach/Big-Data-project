@@ -53,9 +53,14 @@ for message in consumer:
     print(f"INFO: Received message from Kafka for PR: {message.value.get('number', 'N/A')}")
     pr = message.value
     print(f"INFO: Attempting to upsert PR #{pr['number']} into MongoDB.")
-    coll.update_one(
-        {"number": pr["number"]},
-        {"$set": pr},
-        upsert=True
-    )
-    print(f"INFO: Upserted PR #{pr['number']} into MongoDB")
+    try:
+        result = coll.update_one(
+            {"number": pr["number"]},
+            {"$set": pr},
+            upsert=True
+        )
+        print(f"INFO: Upserted PR #{pr['number']} into MongoDB. Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted Id: {result.upserted_id}")
+    except pymongo.errors.PyMongoError as e:
+        print(f"ERROR: Failed to upsert PR #{pr['number']} into MongoDB: {e}")
+    except Exception as e:
+        print(f"ERROR: An unexpected error occurred during MongoDB upsert for PR #{pr['number']}: {e}")

@@ -36,7 +36,7 @@ services:
     volumes:
       - mongodb_data:/data/db # Persist MongoDB data
       - ./mongodb_init/wait-for-mongo-primary.sh:/usr/local/bin/wait-for-mongo-primary.sh:ro
-    command: bash /usr/local/bin/wait-for-mongo-primary.sh
+    command: bash /usr/local/bin/wait-for-mongo-primary.sh --logpath /dev/null --setParameter logLevel=5
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 5s
