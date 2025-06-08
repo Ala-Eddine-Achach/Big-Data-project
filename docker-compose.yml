@@ -119,7 +119,6 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MONGO_URL: mongodb://mongodb:27017/
-      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:10.5.0 --conf spark.mongodb.input.uri=mongodb://mongodb:27017/github.raw_prs --conf spark.mongodb.output.uri=mongodb://mongodb:27017/github.analytics"
     depends_on:
       - kafka_broker
       - mongodb
