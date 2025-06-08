@@ -100,13 +100,15 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:5000/api # Pass API URL as build argument to React app
     container_name: dashboard
     ports:
-      - "8081:80" # Map container port 80 to host port 8081
+      - "80:80" # Nginx default port
     depends_on:
       - backend_api # Dashboard relies on the backend API for data
     environment:
-      - VITE_API_URL=http://backend_api:5000/api
+      VITE_REFRESH_INTERVAL: 5000 # Example refresh interval
 
   spark_batch_job:
     build:
