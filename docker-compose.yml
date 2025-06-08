@@ -94,6 +94,7 @@ services:
       COLLECTION: analytics
       RAW_PRS_COLLECTION: raw_prs
       FLASK_SECRET_KEY: YOUR_VERY_STRONG_RANDOM_SECRET_KEY
+      PYTHONUNBUFFERED: 1
     mem_limit: 512m
 
   dashboard:
@@ -101,7 +102,7 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:5000/api # Pass API URL as build argument to React app
+        VITE_API_URL: http://localhost:5050/api # Pass API URL as build argument to React app
     container_name: dashboard
     ports:
       - "80:80" # Nginx default port

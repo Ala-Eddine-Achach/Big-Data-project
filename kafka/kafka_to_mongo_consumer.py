@@ -52,6 +52,10 @@ print("INFO: Starting to consume messages from Kafka...")
 for message in consumer:
     print(f"INFO: Received message from Kafka for PR: {message.value.get('number', 'N/A')}")
     pr = message.value
+    # Remove MongoDB's _id field if it exists in the incoming data
+    # This ensures MongoDB generates/manages _id correctly for upserts
+    if '_id' in pr:
+        del pr['_id']
     print(f"INFO: Attempting to upsert PR #{pr['number']} into MongoDB.")
     try:
         result = coll.update_one(
