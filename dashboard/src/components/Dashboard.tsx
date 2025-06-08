@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { apiService } from '../services/api';
 import { DashboardCard } from './DashboardCard';
@@ -9,24 +9,75 @@ import { VolumeChart } from './charts/VolumeChart';
 import { ContributorsChart } from './charts/ContributorsChart';
 import { PRFeed } from './PRFeed';
 import { RefreshCw, TrendingUp, GitPullRequest, Users, Clock } from 'lucide-react';
+import { AnalyticsData, PRData } from '../types';
 
 const REFRESH_INTERVAL = parseInt(import.meta.env.VITE_REFRESH_INTERVAL || '10000');
 
 export const Dashboard: React.FC = () => {
-  const {
-    data: analyticsData,
-    loading: analyticsLoading,
-    error: analyticsError,
-    refetch: refetchAnalytics,
-  } = useApi(() => apiService.getAnalytics(), { refreshInterval: REFRESH_INTERVAL });
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData[]>([]);
+  const [prsData, setPrsData] = useState<PRData[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [prsLoading, setPrsLoading] = useState(true);
 
-  const {
-    data: prsData,
-    loading: prsLoading,
-    error: prsError,
-    refetch: refetchPRs,
-  } = useApi(() => apiService.getPRs(), { refreshInterval: REFRESH_INTERVAL });
+  useEffect(() => {
+    // Initial fetch for analytics data
+    apiService.getAnalytics().then(data => {
+      setAnalyticsData(data);
+      setAnalyticsLoading(false);
+      console.log("Initial Analytics Data fetched:", data);
+    }).catch(error => {
+      console.error("Error fetching initial analytics data:", error);
+      setAnalyticsLoading(false);
+    });
 
+    // Initial fetch for PRs data
+    apiService.getPRs().then(data => {
+      setPrsData(data);
+      setPrsLoading(false);
+      console.log("Initial PRs Data fetched:", data);
+    }).catch(error => {
+      console.error("Error fetching initial PRs data:", error);
+      setPrsLoading(false);
+    });
+
+    // Connect to WebSocket for real-time updates
+    apiService.connectSocket(
+      (newAnalyticsData: AnalyticsData) => {
+        setAnalyticsData((prevData: AnalyticsData[]) => {
+          const existingIndex = prevData.findIndex((item: AnalyticsData) => item.weekday === newAnalyticsData.weekday && item.slot === newAnalyticsData.slot);
+          if (existingIndex > -1) {
+            const updatedData = [...prevData];
+            updatedData[existingIndex] = newAnalyticsData;
+            console.log("Real-time Analytics Data Updated:", newAnalyticsData);
+            return updatedData;
+          } else {
+            console.log("Real-time Analytics Data Added:", newAnalyticsData);
+            return [...prevData, newAnalyticsData];
+          }
+        });
+      },
+      (newPrsData: PRData) => {
+        setPrsData((prevData: PRData[]) => {
+          const existingIndex = prevData.findIndex((item: PRData) => item.number === newPrsData.number);
+          if (existingIndex > -1) {
+            const updatedData = [...prevData];
+            updatedData[existingIndex] = newPrsData;
+            console.log("Real-time PRs Data Updated:", newPrsData);
+            return updatedData;
+          } else {
+            console.log("Real-time PRs Data Added:", newPrsData);
+            return [newPrsData, ...prevData]; // Add new PRs to the top
+          }
+        });
+      }
+    );
+
+    return () => {
+      apiService.disconnectSocket();
+    };
+  }, []);
+
+  // Remaining useApi hooks for data that doesn't update via WebSocket in this example
   const {
     data: stateData,
     loading: stateLoading,
@@ -49,8 +100,8 @@ export const Dashboard: React.FC = () => {
   } = useApi(() => apiService.getVolumeData());
 
   const handleRefreshAll = () => {
-    refetchAnalytics();
-    refetchPRs();
+    // For real-time data, we don't need to refetch, WebSocket handles it.
+    // We only refetch data that is not handled by WebSocket.
     refetchState();
     refetchContributors();
     refetchVolume();
@@ -58,9 +109,9 @@ export const Dashboard: React.FC = () => {
 
   // Calculate summary statistics
   const totalPRs = prsData?.length || 0;
-  const openPRs = prsData?.filter(pr => pr.state === 'open').length || 0;
-  const mergedPRs = prsData?.filter(pr => pr.state === 'merged').length || 0;
-  const avgMergeTime = analyticsData?.reduce((sum, d) => sum + d.avg_merge_time_hours, 0) / (analyticsData?.length || 1) || 0;
+  const openPRs = prsData?.filter((pr: PRData) => pr.state === 'open').length || 0;
+  const mergedPRs = prsData?.filter((pr: PRData) => pr.state === 'merged').length || 0;
+  const avgMergeTime = analyticsData?.reduce((sum: number, d: AnalyticsData) => sum + d.avg_merge_time_hours, 0) / (analyticsData?.length || 1) || 0;
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
@@ -129,20 +180,32 @@ export const Dashboard: React.FC = () => {
             title="PR Merge Activity"
             subtitle="PRs merged by time slot and weekday"
             loading={analyticsLoading}
-            error={analyticsError}
-            onRetry={refetchAnalytics}
+            error={null}
+            onRetry={null}
           >
-            {analyticsData && <PRHeatmap data={analyticsData} />}
+            {analyticsLoading ? (
+              <div className="text-center text-gray-500 py-10">Loading analytics data...</div>
+            ) : analyticsData.length > 0 ? (
+              <PRHeatmap data={analyticsData} />
+            ) : (
+              <div className="text-center text-gray-500 py-10">No PR merge activity data available yet.</div>
+            )}
           </DashboardCard>
 
           <DashboardCard
             title="Average Merge Time"
             subtitle="Time taken to merge PRs by weekday"
             loading={analyticsLoading}
-            error={analyticsError}
-            onRetry={refetchAnalytics}
+            error={null}
+            onRetry={null}
           >
-            {analyticsData && <MergeTimeChart data={analyticsData} />}
+            {analyticsLoading ? (
+              <div className="text-center text-gray-500 py-10">Loading average merge time data...</div>
+            ) : analyticsData.length > 0 ? (
+              <MergeTimeChart data={analyticsData} />
+            ) : (
+              <div className="text-center text-gray-500 py-10">No average merge time data available yet.</div>
+            )}
           </DashboardCard>
 
           <DashboardCard
@@ -184,11 +247,17 @@ export const Dashboard: React.FC = () => {
           title="Live PR Feed"
           subtitle={`Latest pull requests (auto-refreshes every ${REFRESH_INTERVAL / 1000}s)`}
           loading={prsLoading}
-          error={prsError}
-          onRetry={refetchPRs}
+          error={null}
+          onRetry={null}
           className="min-h-[600px]"
         >
-          {prsData && <PRFeed data={prsData} />}
+          {prsLoading ? (
+            <div className="text-center text-gray-500 py-10">Loading live PR feed...</div>
+          ) : prsData.length > 0 ? (
+            <PRFeed data={prsData} />
+          ) : (
+            <div className="text-center text-gray-500 py-10">No live PR data available yet.</div>
+          )}
         </DashboardCard>
       </div>
     </div>

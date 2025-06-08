@@ -5,4 +5,7 @@ pymongo==4.7.3
 pyspark==3.5.1
 flask==3.0.3
 flask-socketio==5.3.6
-eventlet==0.33.3 # or gevent 
+eventlet==0.33.3 # or gevent
+flask-cors==4.0.1
+streamlit
+requests 

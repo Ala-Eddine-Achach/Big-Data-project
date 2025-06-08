@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 from flask_socketio import SocketIO, emit
+from flask_cors import CORS, cross_origin # Import CORS and cross_origin
 from pymongo import MongoClient
 import os
 import json
@@ -9,6 +10,7 @@ import time
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your_strong_secret_key') # Use a strong, unique key in production
 socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app, resources={r"/api/*": {"origins": "*"}}) # Initialize CORS for the Flask app, allowing all origins for /api routes
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 DB_NAME = os.getenv("DB_NAME", "github")
@@ -58,16 +60,35 @@ def get_raw_prs():
         if 'user' in doc and 'login' in doc['user']:
             doc['user_login'] = doc['user']['login']
         data.append(doc)
+    print(f"INFO: Sending {len(data)} raw PRs via /api/raw-prs endpoint.")
     return jsonify(data)
 
 @app.route('/api/analytics')
+@cross_origin() # Add this decorator
 def get_all_analytics():
     # This endpoint is for initial load or full refresh, not real-time
     data = []
     for doc in coll.find():
         doc['_id'] = str(doc['_id'])
         data.append(doc)
+    print(f"INFO: Sending {len(data)} analytics records via /api/analytics endpoint.")
     return jsonify(data)
+
+@app.route('/api/status/raw-prs-count')
+def get_raw_prs_count():
+    try:
+        count = raw_prs_coll.count_documents({})
+        return jsonify({'raw_prs_count': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/status/analytics-count')
+def get_analytics_count():
+    try:
+        count = coll.count_documents({})
+        return jsonify({'analytics_count': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @socketio.on('connect')
 def test_connect():

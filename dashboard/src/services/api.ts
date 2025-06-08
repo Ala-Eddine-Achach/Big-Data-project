@@ -1,8 +1,45 @@
 import { AnalyticsData, PRData, PRStateBreakdown, ContributorStats, VolumeData, ApiResponse } from '../types';
+import { io, Socket } from 'socket.io-client';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // Adjusted port to 5000 for Flask API
 
 class ApiService {
+  private socket: Socket | null = null;
+
+  public connectSocket(onAnalyticsUpdate: (data: AnalyticsData) => void, onPRsUpdate: (data: PRData) => void) {
+    if (!this.socket) {
+      this.socket = io(API_BASE_URL.replace('/api', '')); // Connect to the base URL for Socket.IO
+
+      this.socket.on('connect', () => {
+        console.log('Connected to WebSocket server');
+      });
+
+      this.socket.on('data_update', (data: any) => {
+        // Determine if it's analytics or raw PR data based on structure/keys
+        if (data.hasOwnProperty('weekday') && data.hasOwnProperty('slot')) {
+            onAnalyticsUpdate(data);
+        } else if (data.hasOwnProperty('number') && data.hasOwnProperty('title')) {
+            onPRsUpdate(data);
+        }
+      });
+
+      this.socket.on('disconnect', () => {
+        console.log('Disconnected from WebSocket server');
+      });
+
+      this.socket.on('connect_error', (err: any) => {
+        console.error('WebSocket connection error:', err);
+      });
+    }
+  }
+
+  public disconnectSocket() {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+  }
+
   private async fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -29,31 +66,32 @@ class ApiService {
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/analytics`);
       
       if (!response.ok) {
-        // Return mock data if API is not available
-        return this.getMockAnalytics();
+        console.error(`API Error fetching analytics: ${response.status} ${response.statusText}`);
+        return []; // Return empty array on error or non-OK response
       }
       
-      const result: ApiResponse<AnalyticsData[]> = await response.json();
-      return result.data || result;
+      const result: AnalyticsData[] = await response.json(); // Direct type assertion as API now returns array
+      return result;
     } catch (error) {
-      console.warn('Analytics API unavailable, using mock data:', error);
-      return this.getMockAnalytics();
+      console.error('Error fetching analytics data:', error);
+      return []; // Return empty array on network error
     }
   }
 
   async getPRs(): Promise<PRData[]> {
     try {
-      const response = await this.fetchWithTimeout(`${API_BASE_URL}/prs`);
+      const response = await this.fetchWithTimeout(`${API_BASE_URL}/raw-prs`); // Changed endpoint to raw-prs
       
       if (!response.ok) {
-        return this.getMockPRs();
+        console.error(`API Error fetching PRs: ${response.status} ${response.statusText}`);
+        return []; // Return empty array on error or non-OK response
       }
       
-      const result: ApiResponse<PRData[]> = await response.json();
-      return result.data || result;
+      const result: PRData[] = await response.json(); // Direct type assertion
+      return result;
     } catch (error) {
-      console.warn('PRs API unavailable, using mock data:', error);
-      return this.getMockPRs();
+      console.error('Error fetching PRs data:', error);
+      return []; // Return empty array on network error
     }
   }
 
@@ -62,14 +100,15 @@ class ApiService {
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/pr-states`);
       
       if (!response.ok) {
-        return this.getMockPRStateBreakdown();
+        console.error(`API Error fetching PR state breakdown: ${response.status} ${response.statusText}`);
+        return [];
       }
       
-      const result: ApiResponse<PRStateBreakdown[]> = await response.json();
-      return result.data || result;
+      const result: PRStateBreakdown[] = await response.json();
+      return result; // Direct type assertion
     } catch (error) {
-      console.warn('PR States API unavailable, using mock data:', error);
-      return this.getMockPRStateBreakdown();
+      console.error('Error fetching PR state breakdown:', error);
+      return [];
     }
   }
 
@@ -78,14 +117,15 @@ class ApiService {
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/contributors`);
       
       if (!response.ok) {
-        return this.getMockContributors();
+        console.error(`API Error fetching top contributors: ${response.status} ${response.statusText}`);
+        return [];
       }
       
-      const result: ApiResponse<ContributorStats[]> = await response.json();
-      return result.data || result;
+      const result: ContributorStats[] = await response.json();
+      return result; // Direct type assertion
     } catch (error) {
-      console.warn('Contributors API unavailable, using mock data:', error);
-      return this.getMockContributors();
+      console.error('Error fetching top contributors:', error);
+      return [];
     }
   }
 
@@ -94,99 +134,16 @@ class ApiService {
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/volume`);
       
       if (!response.ok) {
-        return this.getMockVolumeData();
+        console.error(`API Error fetching volume data: ${response.status} ${response.statusText}`);
+        return [];
       }
       
-      const result: ApiResponse<VolumeData[]> = await response.json();
-      return result.data || result;
+      const result: VolumeData[] = await response.json();
+      return result; // Direct type assertion
     } catch (error) {
-      console.warn('Volume API unavailable, using mock data:', error);
-      return this.getMockVolumeData();
+      console.error('Error fetching volume data:', error);
+      return [];
     }
-  }
-
-  // Mock data generators for demonstration
-  private getMockAnalytics(): AnalyticsData[] {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const data: AnalyticsData[] = [];
-    
-    for (const weekday of weekdays) {
-      for (let slot = 0; slot < 6; slot++) {
-        data.push({
-          weekday,
-          slot,
-          merged_count: Math.floor(Math.random() * 10) + 1,
-          avg_merge_time_hours: Math.round((Math.random() * 8 + 1) * 10) / 10,
-        });
-      }
-    }
-    
-    return data;
-  }
-
-  private getMockPRs(): PRData[] {
-    const states: ('open' | 'closed' | 'merged')[] = ['open', 'closed', 'merged'];
-    const users = ['alice', 'bob', 'charlie', 'diana', 'eve', 'frank'];
-    const repos = ['frontend', 'backend', 'mobile', 'infrastructure'];
-    
-    return Array.from({ length: 20 }, (_, i) => {
-      const createdAt = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
-      const state = states[Math.floor(Math.random() * states.length)];
-      
-      return {
-        id: i + 1,
-        number: 1000 + i,
-        title: `Fix issue #${Math.floor(Math.random() * 500)} - ${['Performance improvement', 'Bug fix', 'Feature enhancement', 'Security update'][Math.floor(Math.random() * 4)]}`,
-        user_login: users[Math.floor(Math.random() * users.length)],
-        state,
-        created_at: createdAt.toISOString(),
-        updated_at: new Date(createdAt.getTime() + Math.random() * 2 * 24 * 60 * 60 * 1000).toISOString(),
-        merged_at: state === 'merged' ? new Date(createdAt.getTime() + Math.random() * 3 * 24 * 60 * 60 * 1000).toISOString() : undefined,
-        html_url: `https://github.com/company/${repos[Math.floor(Math.random() * repos.length)]}/pull/${1000 + i}`,
-        repository: repos[Math.floor(Math.random() * repos.length)],
-        additions: Math.floor(Math.random() * 500),
-        deletions: Math.floor(Math.random() * 200),
-        changed_files: Math.floor(Math.random() * 15) + 1,
-      };
-    });
-  }
-
-  private getMockPRStateBreakdown(): PRStateBreakdown[] {
-    return [
-      { state: 'open', count: 45, percentage: 30 },
-      { state: 'merged', count: 75, percentage: 50 },
-      { state: 'closed', count: 30, percentage: 20 },
-    ];
-  }
-
-  private getMockContributors(): ContributorStats[] {
-    const users = ['alice', 'bob', 'charlie', 'diana', 'eve', 'frank'];
-    
-    return users.map(user => ({
-      user_login: user,
-      pr_count: Math.floor(Math.random() * 50) + 10,
-      merged_count: Math.floor(Math.random() * 40) + 5,
-      avg_merge_time: Math.round((Math.random() * 48 + 6) * 10) / 10,
-    })).sort((a, b) => b.pr_count - a.pr_count);
-  }
-
-  private getMockVolumeData(): VolumeData[] {
-    const data: VolumeData[] = [];
-    const now = new Date();
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        created: Math.floor(Math.random() * 15) + 5,
-        merged: Math.floor(Math.random() * 12) + 3,
-        closed: Math.floor(Math.random() * 5) + 1,
-      });
-    }
-    
-    return data;
   }
 }
 
