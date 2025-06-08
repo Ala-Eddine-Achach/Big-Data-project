@@ -1,19 +1,16 @@
 from flask import Flask, jsonify
 from flask_socketio import SocketIO, emit
 from pymongo import MongoClient
-from dotenv import load_dotenv
 import os
 import json
 import threading
 import time
 
-load_dotenv()
-
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'supersecret')
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your_strong_secret_key') # Use a strong, unique key in production
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 DB_NAME = os.getenv("DB_NAME", "github")
 COLLECTION = os.getenv("COLLECTION", "analytics") # Spark job outputs to analytics
 RAW_PRS_COLLECTION = os.getenv("RAW_PRS_COLLECTION", "raw_prs") # Kafka consumer outputs to raw_prs

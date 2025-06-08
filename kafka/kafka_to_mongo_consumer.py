@@ -1,12 +1,13 @@
 from kafka import KafkaConsumer
 import pymongo
 import json
+import os
 
-MONGO_URL = "mongodb://localhost:27017"
-DB_NAME = "github"
-COLLECTION = "raw_prs"
-KAFKA_TOPIC = "github-prs"
-KAFKA_SERVER = "localhost:9092"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017/?replicaSet=rs0")
+DB_NAME = os.getenv("DB_NAME", "github")
+COLLECTION = os.getenv("RAW_PRS_COLLECTION", "raw_prs")
+KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "github-prs-topic")
+KAFKA_SERVER = os.getenv("KAFKA_SERVER", "kafka_broker:29092")
 
 client = pymongo.MongoClient(MONGO_URL)
 db = client[DB_NAME]

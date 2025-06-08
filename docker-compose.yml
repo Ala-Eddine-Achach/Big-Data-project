@@ -6,26 +6,27 @@ services:
     container_name: zookeeper
     ports:
       - "2181:2181"
-    environment:
-      ZOO_MY_ID: 1
-      ZOO_SERVERS: server.1=0.0.0.0:2888:3888
+    environment: {}
 
   kafka_broker:
     image: confluentinc/cp-kafka:7.6.0
     container_name: kafka_broker
     ports:
       - "9092:9092"
-      - "9093:9093" # For inter-broker communication / external access
+      - "29092:29092" # Port for internal communication
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_broker:9092,PLAINTEXT_HOST://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,LISTENER_DOCKER_EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_broker:29092,LISTENER_DOCKER_EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
   mongodb:
     image: mongo:6.0
@@ -34,58 +35,62 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db # Persist MongoDB data
-    command: ["--replSet", "rs0", "--bind_ip_all"]
+      - ./mongodb_init/wait-for-mongo-primary.sh:/usr/local/bin/wait-for-mongo-primary.sh:ro
+    command: bash /usr/local/bin/wait-for-mongo-primary.sh
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
 
   github_pr_producer:
     build:
       context: .
       dockerfile: Dockerfile.python
     container_name: github_pr_producer
-    command: python kafka/github_pr_producer.py
+    command: kafka/github_pr_producer.py
     depends_on:
       - kafka_broker
     environment:
-      # Pass environment variables from host's .env file
-      - GITHUB_TOKEN
-      - OWNER
-      - REPO
-      - KAFKA_TOPIC
-      - KAFKA_SERVER
+      GITHUB_TOKEN: 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
+      OWNER: kubernetes
+      REPO: kubernetes
+      KAFKA_TOPIC: github-prs-topic
+      KAFKA_SERVER: kafka_broker:29092
+      PYTHONUNBUFFERED: 1
 
   kafka_to_mongo_consumer:
     build:
       context: .
       dockerfile: Dockerfile.python
     container_name: kafka_to_mongo_consumer
-    command: python kafka/kafka_to_mongo_consumer.py
+    command: bash -c "sleep 30 && python kafka/kafka_to_mongo_consumer.py"
     depends_on:
       - kafka_broker
       - mongodb
     environment:
-      # Kafka and MongoDB variables are hardcoded in consumer.py
-      # No need to pass them from .env here unless you change the consumer to read them.
-      - KAFKA_TOPIC
-      - KAFKA_SERVER
-      - MONGO_URL
-      - DB_NAME
-      - COLLECTION
+      KAFKA_TOPIC: github-prs-topic
+      KAFKA_SERVER: kafka_broker:29092
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: github
+      COLLECTION: raw_prs
 
   backend_api:
     build:
       context: .
       dockerfile: Dockerfile.python
     container_name: backend_api
-    command: python api/app.py
+    command: bash -c "sleep 15 && python api/app.py"
     ports:
       - "5000:5000"
     depends_on:
       - mongodb
     environment:
-      - MONGO_URL
-      - DB_NAME
-      - COLLECTION
-      - RAW_PRS_COLLECTION
-      - FLASK_SECRET_KEY
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: github
+      COLLECTION: analytics
+      RAW_PRS_COLLECTION: raw_prs
+      FLASK_SECRET_KEY: YOUR_VERY_STRONG_RANDOM_SECRET_KEY
 
   dashboard:
     build:
@@ -93,9 +98,11 @@ services:
       dockerfile: Dockerfile
     container_name: dashboard
     ports:
-      - "8080:80" # Map container port 80 to host port 8080
+      - "8081:80" # Map container port 80 to host port 8081
     depends_on:
       - backend_api # Dashboard relies on the backend API for data
+    environment:
+      - VITE_API_URL=http://backend_api:5000/api
 
   spark_batch_job:
     build:
@@ -105,14 +112,14 @@ services:
     # This service is for running the batch job manually or via a scheduler.
     # It won't run automatically with `docker compose up` unless you change the command.
     # To run it, you would use: docker compose run spark_batch_job python spark/spark-bacth-job.py
-    command: ["sleep", "infinity"] # Keep container alive without running the job automatically
+    command: bash spark/run_hourly_job.sh
     depends_on:
       - mongodb # Spark job reads from MongoDB
     environment:
-      MONGO_SPARK_INPUT_URI: ${MONGO_SPARK_INPUT_URI}
-      MONGO_SPARK_OUTPUT_URI: ${MONGO_SPARK_OUTPUT_URI}
+      MONGO_SPARK_INPUT_URI: mongodb://mongodb:27017/github.raw_prs
+      MONGO_SPARK_OUTPUT_URI: mongodb://mongodb:27017/github.analytics
       SPARK_LOCAL_IP: spark_batch_job # Helps Spark resolve hostname in Docker network
-      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:${SPARK_MONGO_CONNECTOR_VERSION}"
+      SPARK_SUBMIT_ARGS: "--packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.1"
     volumes:
       - spark_logs:/opt/spark/work
 
