@@ -8,6 +8,7 @@ import { VolumeChart } from './charts/VolumeChart';
 import { ContributorsChart } from './charts/ContributorsChart';
 import { GitPullRequest, Users, Clock, ExternalLink, User, Calendar, Loader2, BarChart, TrendingUp } from 'lucide-react';
 import { AnalyticsData, PRData, PRStateBreakdown, ContributorStats, VolumeData } from '../types';
+import { PRFeed } from './PRFeed';
 
 const REFRESH_INTERVAL = parseInt(import.meta.env.VITE_REFRESH_INTERVAL || '10000');
 
@@ -24,9 +25,10 @@ export const Dashboard: React.FC = () => {
   const [volumeData, setVolumeData] = useState<VolumeData[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [showPopUp, setShowPopUp] = useState<string | null>(null);
 
   useEffect(() => {
-    apiService.connectSocket(
+    const socket = apiService.connectSocket(
       // onAnalyticsUpdate (real-time single analytics update)
       (newAnalyticsData: AnalyticsData) => {
         setAnalyticsData((prevData: AnalyticsData[]) => {
@@ -34,10 +36,12 @@ export const Dashboard: React.FC = () => {
           if (existingIndex > -1) {
             const updatedData = [...prevData];
             updatedData[existingIndex] = newAnalyticsData;
-            console.log("Real-time Analytics Data Updated:", newAnalyticsData);
+            setShowPopUp('Analytics updated!');
+            setTimeout(() => setShowPopUp(null), 3000);
             return updatedData;
           } else {
-            console.log("Real-time Analytics Data Added:", newAnalyticsData);
+            setShowPopUp('New analytics data!');
+            setTimeout(() => setShowPopUp(null), 3000);
             return [...prevData, newAnalyticsData];
           }
         });
@@ -49,10 +53,12 @@ export const Dashboard: React.FC = () => {
           if (existingIndex > -1) {
             const updatedData = [...prevData];
             updatedData[existingIndex] = newPrsData;
-            console.log("Real-time PRs Data Updated:", newPrsData);
+            setShowPopUp('PR updated!');
+            setTimeout(() => setShowPopUp(null), 3000);
             return updatedData;
           } else {
-            console.log("Real-time PRs Data Added:", newPrsData);
+            setShowPopUp('New PR received!');
+            setTimeout(() => setShowPopUp(null), 3000);
             return [newPrsData, ...prevData];
           }
         });
@@ -77,6 +83,14 @@ export const Dashboard: React.FC = () => {
       }
     );
 
+    // Listen for initial_prs event
+    if (socket) {
+      socket.on('initial_prs', (initialPRs: PRData[]) => {
+        setPrsData(initialPRs);
+        console.log('Initial PRs Data Loaded via WebSocket:', initialPRs);
+      });
+    }
+
     setLoading(false);
 
     return () => {
@@ -92,6 +106,12 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
+      {/* Pop-up notification */}
+      {showPopUp && (
+        <div className="fixed top-6 right-6 z-50 bg-blue-600 text-white px-6 py-3 rounded shadow-lg animate-bounce">
+          {showPopUp}
+        </div>
+      )}
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -153,6 +173,7 @@ export const Dashboard: React.FC = () => {
             error={null}
             onRetry={null}
           >
+            {/* Chart updates automatically when analyticsData changes */}
             {loading ? (
               <div className="text-center text-gray-500 py-10"><Loader2 className="animate-spin inline-block mr-2" />Loading analytics data...</div>
             ) : analyticsData.length > 0 ? (
@@ -169,6 +190,7 @@ export const Dashboard: React.FC = () => {
             error={null}
             onRetry={null}
           >
+            {/* Chart updates automatically when analyticsData changes */}
             {loading ? (
               <div className="text-center text-gray-500 py-10"><Loader2 className="animate-spin inline-block mr-2" />Loading average merge time data...</div>
             ) : analyticsData.length > 0 ? (
@@ -233,40 +255,15 @@ export const Dashboard: React.FC = () => {
         {/* Live PR Feed */}
         <DashboardCard
           title="Live PR Feed"
-          subtitle={`Latest pull request (real-time from Kafka)`}
+          subtitle={`Latest pull requests (real-time from Kafka)`}
           loading={loading}
           error={null}
           onRetry={null}
         >
           {loading ? (
             <div className="text-center text-gray-500 py-10"><Loader2 className="animate-spin inline-block mr-2" />Waiting for PR updates...</div>
-          ) : latestPopUpPR ? (
-            <div className="p-4 bg-gray-800 rounded-lg shadow-lg relative">
-              <a
-                href={latestPopUpPR.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
-              <h4 className="text-white font-semibold text-lg mb-2">#{latestPopUpPR.number} - {latestPopUpPR.title}</h4>
-              <div className="flex items-center gap-4 text-sm text-gray-400 mb-2">
-                <span className="flex items-center gap-1">
-                  <User className="w-4 h-4" />
-                  {latestPopUpPR.user_login}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  {new Date(latestPopUpPR.created_at).toLocaleString()}
-                </span>
-              </div>
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${getStateColor(latestPopUpPR.state)}`}
-              >
-                {latestPopUpPR.state}
-              </span>
-            </div>
+          ) : prsData.length > 0 ? (
+            <PRFeed data={prsData.slice(0, 10)} />
           ) : (
             <div className="text-center text-gray-500 py-10">No live PR data available yet. Waiting for new PRs from Kafka.</div>
           )}

@@ -98,8 +98,15 @@ def handle_connect():
         analytics_count = coll.count_documents({})
         socketio.emit('status_counts', {'raw_prs_count': raw_prs_count, 'analytics_count': analytics_count})
         print(f"INFO: Sent initial counts: Raw PRs={raw_prs_count}, Analytics={analytics_count}")
+        # Emit all raw PRs to the connecting client
+        raw_prs_data = []
+        for doc in raw_prs_coll.find():
+            doc['_id'] = str(doc['_id'])
+            raw_prs_data.append(doc)
+        emit('initial_prs', raw_prs_data)
+        print(f"INFO: Sent {len(raw_prs_data)} initial raw PRs via WebSocket.")
     except Exception as e:
-        print(f"Error sending initial counts: {e}")
+        print(f"Error sending initial counts or raw PRs: {e}")
 
 @socketio.on('disconnect')
 def test_disconnect():
