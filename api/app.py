@@ -1,105 +1,124 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, jsonify
 from flask_socketio import SocketIO, emit
-from flask_cors import CORS, cross_origin # Import CORS and cross_origin
+from flask_cors import CORS
 from pymongo import MongoClient
 import os
 import json
 import threading
 import time
+from confluent_kafka import Consumer, KafkaException, KafkaError
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your_strong_secret_key') # Use a strong, unique key in production
-socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app, resources={r"/api/*": {"origins": "*"}}) # Initialize CORS for the Flask app, allowing all origins for /api routes
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your_strong_secret_key')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 DB_NAME = os.getenv("DB_NAME", "github")
-COLLECTION = os.getenv("COLLECTION", "analytics") # Spark job outputs to analytics
-RAW_PRS_COLLECTION = os.getenv("RAW_PRS_COLLECTION", "raw_prs") # Kafka consumer outputs to raw_prs
+COLLECTION = os.getenv("COLLECTION", "analytics")
+RAW_PRS_COLLECTION = os.getenv("RAW_PRS_COLLECTION", "raw_prs")
+
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka_broker:29092")
+KAFKA_PR_TOPIC = os.getenv("KAFKA_PR_TOPIC", "github-prs-topic")
 
 client = MongoClient(MONGO_URL)
 db = client[DB_NAME]
-coll = db[COLLECTION] # For analytics data
-raw_prs_coll = db[RAW_PRS_COLLECTION] # For raw PR data
+coll = db[COLLECTION]
+raw_prs_coll = db[RAW_PRS_COLLECTION]
 
 def monitor_mongo_changes():
     print("Starting MongoDB change stream monitor...")
+    while True:
+        try:
+            with coll.watch(full_document='updateLookup') as change_stream:
+                for change in change_stream:
+                    print(f"Change detected: {change['operationType']}")
+                    if change['operationType'] in ['insert', 'update', 'replace']:
+                        document = change.get('fullDocument')
+                        if document:
+                            document['_id'] = str(document['_id'])
+                            socketio.emit('data_update', document)
+                    elif change['operationType'] == 'delete':
+                        socketio.emit('data_delete', str(change['documentKey']['_id']))
+                    elif change['operationType'] in ['drop', 'invalidate']:
+                        print('Change stream closed due to drop/invalidate, will reconnect...')
+                        break
+        except Exception as e:
+            print(f"Error monitoring MongoDB changes: {e}")
+        print('Sleeping 5 seconds before reconnecting to change stream...')
+        eventlet.sleep(5)
+
+def consume_kafka_messages():
+    print("Starting Kafka consumer...")
+    conf = {
+        'bootstrap.servers': KAFKA_BROKER,
+        'group.id': 'flask_api_group',
+        'auto.offset.reset': 'latest'
+    }
+    consumer = Consumer(conf)
     try:
-        # Use a full document pre-image to get the document before and after change
-        # requires MongoDB 6.0 or later and collection to have change stream pre-images enabled
-        # db.command({'collMod': COLLECTION, 'changeStreamPreAndPostImages': {'enabled': True}});
-        with coll.watch(full_document='updateLookup') as change_stream:
-            for change in change_stream:
-                print(f"Change detected: {change['operationType']}")
-                # For simplicity, we'll just send the full document after update
-                if change['operationType'] in ['insert', 'update', 'replace']:
-                    document = change.get('fullDocument')
-                    if document:
-                        # Convert ObjectId to string for JSON serialization
-                        document['_id'] = str(document['_id'])
-                        socketio.emit('data_update', document)
-                elif change['operationType'] == 'delete':
-                    # Send the ID of the deleted document
-                    socketio.emit('data_delete', str(change['documentKey']['_id']))
+        consumer.subscribe([KAFKA_PR_TOPIC])
+        while True:
+            msg = consumer.poll(1.0)
+            if msg is None:
+                eventlet.sleep(0)
+                continue
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    eventlet.sleep(0)
+                    continue
+                else:
+                    print(f"Kafka error: {msg.error()}")
+                    break
+            pr_data = json.loads(msg.value().decode('utf-8'))
+            print(f"Received Kafka message for PR: {pr_data.get('id')}")
+            if '_id' in pr_data:
+                pr_data['_id'] = str(pr_data['_id'])
+            socketio.emit('raw_pr_update', pr_data)
+            eventlet.sleep(0)
     except Exception as e:
-        print(f"Error monitoring MongoDB changes: {e}")
-        # Reconnect logic, or simply stop if the error is persistent
-
-@app.route('/')
-def index():
-    return "WebSocket server for GitHub PR Analytics"
-
-@app.route('/api/raw-prs')
-def get_raw_prs():
-    # This endpoint provides a list of individual pull requests
-    # You can add query parameters for pagination, sorting, or filtering if needed.
-    data = []
-    # Fetching a limited number of recent PRs to avoid overwhelming the response
-    for doc in raw_prs_coll.find().sort("updated_at", -1).limit(100):
-        doc['_id'] = str(doc['_id'])
-        if 'user' in doc and 'login' in doc['user']:
-            doc['user_login'] = doc['user']['login']
-        data.append(doc)
-    print(f"INFO: Sending {len(data)} raw PRs via /api/raw-prs endpoint.")
-    return jsonify(data)
-
-@app.route('/api/analytics')
-@cross_origin() # Add this decorator
-def get_all_analytics():
-    # This endpoint is for initial load or full refresh, not real-time
-    data = []
-    for doc in coll.find():
-        doc['_id'] = str(doc['_id'])
-        data.append(doc)
-    print(f"INFO: Sending {len(data)} analytics records via /api/analytics endpoint.")
-    return jsonify(data)
-
-@app.route('/api/status/raw-prs-count')
-def get_raw_prs_count():
-    try:
-        count = raw_prs_coll.count_documents({})
-        return jsonify({'raw_prs_count': count})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/status/analytics-count')
-def get_analytics_count():
-    try:
-        count = coll.count_documents({})
-        return jsonify({'analytics_count': count})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error consuming Kafka messages: {e}")
+    finally:
+        consumer.close()
 
 @socketio.on('connect')
-def test_connect():
-    print("Client connected")
+def handle_connect():
+    print("Client connected, sending initial data...")
     emit('status', {'msg': 'Connected to backend'})
+    analytics_data = []
+    for doc in coll.find():
+        doc['_id'] = str(doc['_id'])
+        analytics_data.append(doc)
+    socketio.emit('initial_analytics', analytics_data)
+    print(f"INFO: Sent {len(analytics_data)} initial analytics records via WebSocket.")
+    try:
+        raw_prs_count = raw_prs_coll.count_documents({})
+        analytics_count = coll.count_documents({})
+        socketio.emit('status_counts', {'raw_prs_count': raw_prs_count, 'analytics_count': analytics_count})
+        print(f"INFO: Sent initial counts: Raw PRs={raw_prs_count}, Analytics={analytics_count}")
+        # Emit all raw PRs to the connecting client
+        raw_prs_data = []
+        for doc in raw_prs_coll.find():
+            doc['_id'] = str(doc['_id'])
+            raw_prs_data.append(doc)
+        emit('initial_prs', raw_prs_data)
+        print(f"INFO: Sent {len(raw_prs_data)} initial raw PRs via WebSocket.")
+    except Exception as e:
+        print(f"Error sending initial counts or raw PRs: {e}")
 
 @socketio.on('disconnect')
 def test_disconnect():
     print('Client disconnected')
 
+@app.route('/healthz')
+def healthz():
+    print('HEALTHCHECK HIT')
+    return 'ok', 200
+
 if __name__ == '__main__':
-    # Start the MongoDB change stream monitor in a separate thread
-    threading.Thread(target=monitor_mongo_changes, daemon=True).start()
-    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True) 
+    print('STARTING SOCKETIO SERVER')
+    eventlet.spawn_n(monitor_mongo_changes)
+    eventlet.spawn_n(consume_kafka_messages)
+    socketio.run(app, host='0.0.0.0', port=5000)

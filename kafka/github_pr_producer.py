@@ -52,6 +52,7 @@ def send_prs_to_kafka(prs):
     print(f"INFO: Attempting to send {len(prs)} PRs to Kafka topic '{KAFKA_TOPIC}'.")
     for pr in prs:
         pr_data = {
+            "id": pr["id"],
             "number": pr["number"],
             "title": pr["title"],
             "user_login": pr["user"]["login"],
