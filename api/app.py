@@ -30,19 +30,25 @@ raw_prs_coll = db[RAW_PRS_COLLECTION]
 
 def monitor_mongo_changes():
     print("Starting MongoDB change stream monitor...")
-    try:
-        with coll.watch(full_document='updateLookup') as change_stream:
-            for change in change_stream:
-                print(f"Change detected: {change['operationType']}")
-                if change['operationType'] in ['insert', 'update', 'replace']:
-                    document = change.get('fullDocument')
-                    if document:
-                        document['_id'] = str(document['_id'])
-                        socketio.emit('data_update', document)
-                elif change['operationType'] == 'delete':
-                    socketio.emit('data_delete', str(change['documentKey']['_id']))
-    except Exception as e:
-        print(f"Error monitoring MongoDB changes: {e}")
+    while True:
+        try:
+            with coll.watch(full_document='updateLookup') as change_stream:
+                for change in change_stream:
+                    print(f"Change detected: {change['operationType']}")
+                    if change['operationType'] in ['insert', 'update', 'replace']:
+                        document = change.get('fullDocument')
+                        if document:
+                            document['_id'] = str(document['_id'])
+                            socketio.emit('data_update', document)
+                    elif change['operationType'] == 'delete':
+                        socketio.emit('data_delete', str(change['documentKey']['_id']))
+                    elif change['operationType'] in ['drop', 'invalidate']:
+                        print('Change stream closed due to drop/invalidate, will reconnect...')
+                        break
+        except Exception as e:
+            print(f"Error monitoring MongoDB changes: {e}")
+        print('Sleeping 5 seconds before reconnecting to change stream...')
+        eventlet.sleep(5)
 
 def consume_kafka_messages():
     print("Starting Kafka consumer...")
@@ -57,9 +63,11 @@ def consume_kafka_messages():
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
+                eventlet.sleep(0)
                 continue
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
+                    eventlet.sleep(0)
                     continue
                 else:
                     print(f"Kafka error: {msg.error()}")
@@ -69,7 +77,7 @@ def consume_kafka_messages():
             if '_id' in pr_data:
                 pr_data['_id'] = str(pr_data['_id'])
             socketio.emit('raw_pr_update', pr_data)
-            # Consider removing or reducing the sleep time if you want real-time updates
+            eventlet.sleep(0)
     except Exception as e:
         print(f"Error consuming Kafka messages: {e}")
     finally:
@@ -97,7 +105,13 @@ def handle_connect():
 def test_disconnect():
     print('Client disconnected')
 
+@app.route('/healthz')
+def healthz():
+    print('HEALTHCHECK HIT')
+    return 'ok', 200
+
 if __name__ == '__main__':
-    threading.Thread(target=monitor_mongo_changes, daemon=True).start()
-    threading.Thread(target=consume_kafka_messages, daemon=True).start()
+    print('STARTING SOCKETIO SERVER')
+    eventlet.spawn_n(monitor_mongo_changes)
+    eventlet.spawn_n(consume_kafka_messages)
     socketio.run(app, host='0.0.0.0', port=5000)

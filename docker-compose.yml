@@ -88,6 +88,11 @@ services:
       - "5050:5000"
     depends_on:
       - mongodb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
     environment:
       MONGO_URL: mongodb://mongodb:27017
       DB_NAME: github
@@ -107,9 +112,10 @@ services:
         VITE_API_URL: http://localhost:5050 # Changed to base URL for Socket.IO connection
     container_name: dashboard
     ports:
-      - "5051:80" # Map host port 5050 to container port 80 for Nginx
+      - "5051:80" # Map host port 5051 to container port 80 for Nginx
     depends_on:
-      - backend_api # Dashboard relies on the backend API for data
+      backend_api:
+        condition: service_healthy
     environment:
       VITE_REFRESH_INTERVAL: 5000 # Example refresh interval
 

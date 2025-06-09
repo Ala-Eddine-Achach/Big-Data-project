@@ -2,6 +2,9 @@ FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Install Java for Spark and wget
 # RUN apt-get update && apt-get install -y openjdk-17-jre-headless wget && rm -rf /var/lib/apt/lists/*
 # ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64

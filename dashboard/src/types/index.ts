@@ -47,3 +47,8 @@ export interface ApiResponse<T> {
   success: boolean;
   message?: string;
 }
+
+export interface StatusCounts {
+  raw_prs_count: number;
+  analytics_count: number;
+}
