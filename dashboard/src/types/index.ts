@@ -1,4 +1,5 @@
 export interface AnalyticsData {
+  _id: string;
   weekday: string;
   slot: number;
   merged_count: number;
@@ -6,7 +7,7 @@ export interface AnalyticsData {
 }
 
 export interface PRData {
-  id: number;
+  id: string;
   number: number;
   title: string;
   user_login: string;
