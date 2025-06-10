@@ -126,7 +126,7 @@ export const Dashboard: React.FC = () => {
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-100 text-sm">Total PRs</p>
+                <p className="text-blue-100 text-sm">Merged PRs</p>
                 <p className="text-2xl font-bold">{loading ? <Loader2 className="animate-spin" /> : totalPRs}</p>
               </div>
               <GitPullRequest className="w-8 h-8 text-blue-200" />
@@ -146,7 +146,7 @@ export const Dashboard: React.FC = () => {
           <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-100 text-sm">Merged PRs</p>
+                <p className="text-purple-100 text-sm"> Total PRs</p>
                 <p className="text-2xl font-bold">{loading ? <Loader2 className="animate-spin" /> : mergedPRs}</p>
               </div>
               <Users className="w-8 h-8 text-purple-200" />
@@ -229,25 +229,6 @@ export const Dashboard: React.FC = () => {
               <ContributorsChart data={contributorsData} />
             ) : (
               <div className="text-center text-gray-500 py-10">No top contributors data available yet.</div>
-            )}
-          </DashboardCard>
-        </div>
-
-        {/* Volume Chart - Full Width */}
-        <div className="mb-8">
-          <DashboardCard
-            title="PR Volume Trend"
-            subtitle="Daily PR activity over the last 30 days"
-            loading={loading}
-            error={null}
-            onRetry={null}
-          >
-            {loading ? (
-              <div className="text-center text-gray-500 py-10"><Loader2 className="animate-spin inline-block mr-2" />Loading volume data...</div>
-            ) : volumeData && volumeData.length > 0 ? (
-              <VolumeChart data={volumeData} />
-            ) : (
-              <div className="text-center text-gray-500 py-10">No PR volume data available yet.</div>
             )}
           </DashboardCard>
         </div>
