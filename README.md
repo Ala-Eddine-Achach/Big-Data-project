@@ -1,55 +1,114 @@
 # GitHub PR Big Data Pipeline
 
-This project sets up a comprehensive big data pipeline to ingest, process, and visualize GitHub Pull Request (PR) data in near real-time.
+A real-time and batch data processing pipeline for analyzing GitHub Pull Request (PR) activity.
 
-## Components
--   **GitHub PR Producer**: Fetches PRs from the GitHub API and sends them to Kafka. (`kafka/github_pr_producer.py`)
--   **Kafka**: A distributed streaming platform for ingesting and processing PR data. (`kafka_broker` service)
--   **Kafka to MongoDB Consumer**: Reads PR data from Kafka and stores it in MongoDB. (`kafka/kafka_to_mongo_consumer.py`)
--   **MongoDB**: A NoSQL database serving as a data lake for raw PRs and storing aggregated analytics. (`mongodb` service)
--   **Spark Batch Job**: Processes raw PR data from MongoDB to generate analytics (e.g., average merge time, PR activity) and stores the results back into MongoDB. (`spark/spark-batch-job.py`)
--   **Flask API**: A Python Flask application that exposes REST endpoints for the dashboard to fetch raw PR data and analytics, and serves as a WebSocket server for real-time updates. (`api/app.py`)
--   **React Dashboard**: A modern web application built with React, served by Nginx, that visualizes the PR analytics and raw PR data from the Flask API, including real-time updates via WebSockets. (`dashboard/`)
+This project demonstrates a hybrid architecture combining streaming and batch processing with a modern data lake and interactive dashboard.
 
-## How To Run
+## Architecture Overview
 
-1.  **Build and Start All Services (Recommended):**
-    Navigate to the project root directory and run:
-    ```bash
-    docker-compose up --build -d
-    ```
-    This command will:
-    *   Build Docker images for all custom services (backend API, dashboard, producer, consumer, Spark job).
-    *   Download necessary images for Kafka, Zookeeper, and MongoDB.
-    *   Start all services in detached mode.
+- **Apache Kafka**: Stream ingestion of GitHub PR data
+- **MongoDB (Data Lake)**: Raw data and aggregated analytics storage
+- **Apache Spark**: Batch processing and time-based analytics
+- **Flask-SocketIO**: Real-time streaming API for the dashboard
+- **React Dashboard**: Visualization of PR trends and activity
+- **Docker Compose**: Orchestration of the complete pipeline
 
-2.  **Access the Dashboard:**
-    Once all services are up, open your web browser and navigate to:
-    `http://localhost/`
-    The dashboard will display real-time and historical GitHub PR analytics.
+![Architecture Diagram](https://github.com/user-attachments/assets/95063cf7-de87-4c41-aa2c-f1ea6bda5347)
 
-3.  **View Backend API Logs:**
-    To see logs from the Flask API (backend_api service), run:
-    ```bash
-    docker-compose logs backend_api
-    ```
-    You can also view logs for other services by replacing `backend_api` with `github_pr_producer`, `kafka_to_mongo_consumer`, `spark_batch_job`, `kafka_broker`, `mongodb`, or `zookeeper`.
+## Features
 
-## Customization
+✅ Real-time ingestion of GitHub PR data  
+✅ Streaming updates to an interactive dashboard  
+✅ Batch analytics for long-term trends  
+✅ Data lake architecture with MongoDB  
+✅ Scalable and modular design  
 
--   **GitHub Repository/Owner/Token**: Modify `kafka/github_pr_producer.py` to change the GitHub repository, owner, or your personal access token for fetching PRs.
--   **Spark Analytics**: Adjust the logic in `spark/spark-batch-job.py` to perform different or more advanced analytics on the PR data.
--   **API Endpoints**: Extend `api/app.py` to add new API endpoints or modify existing ones to serve different data or analytics.
--   **Dashboard UI**: Customize the React components in `dashboard/src/components` to change the appearance or add new visualizations.
+## Pipeline Components
 
-## Notes
+### 1️⃣ GitHub PR Producer
 
--   All raw PR data is stored in MongoDB's `github.raw_prs` collection.
--   Processed analytics data is stored in MongoDB's `github.analytics` collection.
--   Kafka facilitates real-time streaming of PR events.
--   Spark is used for batch processing and aggregation of PR data.
--   CORS is configured on the Flask API to allow requests from the dashboard. If you change the dashboard's origin, remember to update the `CORS` configuration in `api/app.py`.
+- Python script to fetch PRs from GitHub API
+- Streams PR data into Kafka topic: `github-prs-topic`
 
----
+### 2️⃣ Kafka Broker
 
-**This project is modular: you can swap components like Kafka, MongoDB, or even the processing engine (e.g., Flink instead of Spark) to fit different architectural needs!**
+- High-throughput streaming backbone
+- Decouples data ingestion from processing
+
+### 3️⃣ Kafka Consumer → MongoDB (Data Lake)
+
+- Consumes PR records from Kafka
+- Writes raw PR data into `raw_prs` collection
+- Enables both real-time and batch access
+
+### 4️⃣ Apache Spark Batch Job
+
+- Periodic batch processing of raw PR data
+- Aggregates metrics such as:
+  - Average merge time
+  - PR volume by time slot and weekday
+- Writes analytics into `analytics` collection
+
+### 5️⃣ Flask-SocketIO Backend
+
+- Streams both:
+  - Live PR updates from Kafka
+  - Aggregated analytics updates from MongoDB
+- WebSocket API for real-time dashboard updates
+
+### 6️⃣ React Dashboard
+
+- Interactive visualization of:
+  - Live PR events
+  - Historical trends (via batch analytics)
+- Connects to backend via WebSocket (Socket.IO)
+
+## Running the Pipeline
+
+### Prerequisites
+
+- Docker
+- Docker Compose
+
+### Steps
+
+1️⃣ Clone the repository:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/github-pr-bigdata-pipeline.git
+cd github-pr-bigdata-pipeline
+```
+
+2️⃣ Configure GitHub API token:
+
+Edit config/github_config.py and insert your GitHub token.
+
+3️⃣ Start the full pipeline:
+
+```bash
+docker-compose up --build
+```
+
+4️⃣ Access the dashboard:
+```bash
+http://localhost:3000
+```
+
+5️⃣ Run Spark batch job manually (optional):
+
+```bash
+docker-compose exec spark spark-submit /opt/spark/jobs/spark_batch_job.py
+```
+
+## Acknowledgments
+MIT License.
+
+## License
+This project was developed as part of the Big Data Engineering course at the National Institute of Applied Sciences and Technologies (INSAT), University of Carthage, Tunisia.
+
+Team members:
+* Alaeddine ACHACH
+* Idris SADDI
+* Mohamed Yessine ELLINI
+* Hatem GHARSALLAH
+
