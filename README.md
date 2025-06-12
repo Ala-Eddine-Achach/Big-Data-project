@@ -1,12 +1,7 @@
 # GitHub Pull Request Big Data Analytics Pipeline
 
 **Mini-Project for Big Data Course**  
-**Instructor:** Mrs. Lilia Sfaxi  
-**Author:** Ala Eddine Achach  
-**Collaborators:**   
-- Idris Saddi  
-- Hatem Gharsallah  
-- Mohamed Yassine Ellini  
+**Professor Instructor:** Mrs. Lilia Sfaxi  
 
 ---
 
@@ -147,18 +142,14 @@ python /app/spark/spark-batch-job.py
 
 ## 🎥 Demo Video
 
-> [!NOTE]  
-> If a demo video is available, it should be linked here.  
-> _You may upload your video to Google Drive, YouTube (as unlisted), or another platform and provide the link._
-
 **Demo Video:**  
-![Image](https://github.com/user-attachments/assets/d81c06ee-e2ac-40f6-86b8-ec84f3d87b30)
+![Video](https://github.com/user-attachments/assets/d81c06ee-e2ac-40f6-86b8-ec84f3d87b30)
 
 ---
 
 ## 👨‍👩‍👦‍👦 Team Members
 
-- **Ala Eddine Achach** (author, presenter)
+- Ala Eddine Achach
 - Idris Saddi
 - Hatem Gharsallah
 - Mohamed Yassine Ellini
@@ -169,3 +160,4 @@ python /app/spark/spark-batch-job.py
 
 MIT License.  
 Project developed for the Big Data Engineering course, INSAT (University of Carthage, Tunisia).
+This Project was ùmostly built with Vibe Coding ❤
