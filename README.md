@@ -51,7 +51,7 @@ flowchart TD
     MongoDB_Raw --> Spark
     Spark --> MongoDB_Analytics
     MongoDB_Analytics --> API
-    MongoDB_Raw --> API
+    Consumer --> API
     API --> Dashboard
 ```
 
@@ -152,7 +152,7 @@ python /app/spark/spark-batch-job.py
 > _You may upload your video to Google Drive, YouTube (as unlisted), or another platform and provide the link._
 
 **Demo Video:**  
-[Watch the pipeline in action (Google Drive link)](https://drive.google.com/file/d/1GRQApTXgWJOQIzSoocW60hanYbzODO4H/view)
+![Image](https://github.com/user-attachments/assets/d81c06ee-e2ac-40f6-86b8-ec84f3d87b30)
 
 ---
 
