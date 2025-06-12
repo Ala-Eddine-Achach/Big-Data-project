@@ -1,3 +1,4 @@
+# logging is part of the Python standard library and does not need to be installed
 python-dotenv==1.0.0
 requests==2.32.3
 kafka-python==2.0.2

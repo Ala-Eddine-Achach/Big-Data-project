@@ -6,14 +6,13 @@ services:
     container_name: zookeeper
     ports:
       - "2181:2181"
-    environment: {}
 
   kafka_broker:
     image: confluentinc/cp-kafka:7.6.0
     container_name: kafka_broker
     ports:
       - "9092:9092"
-      - "29092:29092" # Port for internal communication
+      - "29092:29092"
     depends_on:
       - zookeeper
     environment:
@@ -34,7 +33,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongodb_data:/data/db # Persist MongoDB data
+      - mongodb_data:/data/db
       - ./mongodb_init/wait-for-mongo-primary.sh:/usr/local/bin/wait-for-mongo-primary.sh:ro
     command: bash /usr/local/bin/wait-for-mongo-primary.sh --logpath /dev/null --setParameter logLevel=5
     healthcheck:
@@ -51,13 +50,8 @@ services:
     command: python kafka/github_pr_producer.py
     depends_on:
       - kafka_broker
-    environment:
-      GITHUB_TOKEN: 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
-      OWNER: kubernetes
-      REPO: kubernetes
-      KAFKA_TOPIC: github-prs-topic
-      KAFKA_SERVER: kafka_broker:29092
-      PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     mem_limit: 512m
 
   kafka_to_mongo_consumer:
@@ -69,13 +63,8 @@ services:
     depends_on:
       - kafka_broker
       - mongodb
-    environment:
-      KAFKA_TOPIC: github-prs-topic
-      KAFKA_SERVER: kafka_broker:29092
-      MONGO_URL: mongodb://mongodb:27017
-      DB_NAME: github
-      COLLECTION: raw_prs
-      PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     mem_limit: 512m
 
   backend_api:
@@ -93,15 +82,8 @@ services:
       interval: 5s
       timeout: 2s
       retries: 20
-    environment:
-      MONGO_URL: mongodb://mongodb:27017
-      DB_NAME: github
-      COLLECTION: analytics
-      RAW_PRS_COLLECTION: raw_prs
-      KAFKA_BROKER: kafka_broker:29092 # Kafka broker for real-time PRs
-      KAFKA_PR_TOPIC: github-prs-topic # Kafka topic for raw PRs
-      FLASK_SECRET_KEY: YOUR_VERY_STRONG_RANDOM_SECRET_KEY
-      PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     mem_limit: 512m
 
   dashboard:
@@ -109,15 +91,15 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:5050 # Changed to base URL for Socket.IO connection
+        VITE_API_URL: http://localhost:5050
     container_name: dashboard
     ports:
-      - "5051:80" # Map host port 5051 to container port 80 for Nginx
+      - "5051:80"
     depends_on:
       backend_api:
         condition: service_healthy
     environment:
-      VITE_REFRESH_INTERVAL: 5000 # Example refresh interval
+      VITE_REFRESH_INTERVAL: 5000
 
   spark_batch_job:
     build:
@@ -127,9 +109,8 @@ services:
     volumes:
       - ./spark:/app/spark
       - spark_logs:/opt/bitnami/spark/logs
-    environment:
-      PYTHONUNBUFFERED: 1
-      MONGO_URL: mongodb://mongodb:27017/
+    env_file:
+      - .env
     depends_on:
       - kafka_broker
       - mongodb

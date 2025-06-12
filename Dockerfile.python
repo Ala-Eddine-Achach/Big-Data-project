@@ -18,6 +18,6 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 #     -O /usr/local/lib/python3.10/site-packages/pyspark/jars/mongo-spark-connector_2.12-10.5.0-all.jar
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir --default-timeout=120 -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=300 -r requirements.txt
 
 COPY . .

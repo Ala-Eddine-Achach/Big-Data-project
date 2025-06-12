@@ -3,6 +3,12 @@ import pymongo
 import json
 import os
 import time
+import logging
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s: %(message)s',
+    level=logging.INFO
+)
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017/?replicaSet=rs0")
 DB_NAME = os.getenv("DB_NAME", "github")
@@ -17,13 +23,13 @@ while True:
     try:
         client = pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
-        print("INFO: Successfully connected to MongoDB.")
+        logging.info("INFO: Successfully connected to MongoDB.")
         break
     except pymongo.errors.ServerSelectionTimeoutError as e:
-        print(f"WARNING: MongoDB not available, retrying in {retry_delay_seconds} seconds: {e}")
+        logging.warning(f"WARNING: MongoDB not available, retrying in {retry_delay_seconds} seconds: {e}")
         time.sleep(retry_delay_seconds)
     except Exception as e:
-        print(f"ERROR: An unexpected error occurred during MongoDB connection: {e}. Exiting.")
+        logging.error(f"ERROR: An unexpected error occurred during MongoDB connection: {e}. Exiting.")
         exit(1)
 
 db = client[DB_NAME]
@@ -38,33 +44,33 @@ while True:
             bootstrap_servers=[KAFKA_SERVER],
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
-        print("INFO: Successfully connected to Kafka consumer.")
+        logging.info("INFO: Successfully connected to Kafka consumer.")
         break
     except errors.NoBrokersAvailable:
-        print(f"WARNING: Kafka broker not available for consumer, retrying in {retry_delay_seconds} seconds...")
+        logging.warning(f"WARNING: Kafka broker not available for consumer, retrying in {retry_delay_seconds} seconds...")
         time.sleep(retry_delay_seconds)
     except Exception as e:
-        print(f"ERROR: An unexpected error occurred during Kafka consumer connection: {e}. Exiting.")
+        logging.error(f"ERROR: An unexpected error occurred during Kafka consumer connection: {e}. Exiting.")
         exit(1)
 
-print("INFO: Starting to consume messages from Kafka...")
+logging.info("INFO: Starting to consume messages from Kafka...")
 
 for message in consumer:
-    print(f"INFO: Received message from Kafka for PR: {message.value.get('number', 'N/A')}")
+    logging.info(f"INFO: Received message from Kafka for PR: {message.value.get('number', 'N/A')}")
     pr = message.value
     # Remove MongoDB's _id field if it exists in the incoming data
     # This ensures MongoDB generates/manages _id correctly for upserts
     if '_id' in pr:
         del pr['_id']
-    print(f"INFO: Attempting to upsert PR #{pr['number']} into MongoDB.")
+    logging.info(f"INFO: Attempting to upsert PR #{pr['number']} into MongoDB.")
     try:
         result = coll.update_one(
             {"number": pr["number"]},
             {"$set": pr},
             upsert=True
         )
-        print(f"INFO: Upserted PR #{pr['number']} into MongoDB. Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted Id: {result.upserted_id}")
+        logging.info(f"INFO: Upserted PR #{pr['number']} into MongoDB. Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted Id: {result.upserted_id}")
     except pymongo.errors.PyMongoError as e:
-        print(f"ERROR: Failed to upsert PR #{pr['number']} into MongoDB: {e}")
+        logging.error(f"ERROR: Failed to upsert PR #{pr['number']} into MongoDB: {e}")
     except Exception as e:
-        print(f"ERROR: An unexpected error occurred during MongoDB upsert for PR #{pr['number']}: {e}")
+        logging.error(f"ERROR: An unexpected error occurred during MongoDB upsert for PR #{pr['number']}: {e}")

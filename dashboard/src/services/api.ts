@@ -6,6 +6,15 @@ interface StatusCounts {
   analytics_count: number;
 }
 
+function log(level: 'info' | 'warn' | 'error' | 'debug', ...args: any[]) {
+  const timestamp = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+    `[${timestamp}] [${level.toUpperCase()}]`,
+    ...args
+  );
+}
+
 class ApiService {
   private socket: Socket | null = null;
 
@@ -20,21 +29,21 @@ class ApiService {
       this.socket = io();
 
       this.socket.on('connect', () => {
-        console.log('Connected to WebSocket server');
+        log('info', 'Connected to WebSocket server');
       });
 
       this.socket.on('status', (data: { msg: string }) => {
-        console.log('Backend Status:', data.msg);
+        log('info', 'Backend Status:', data.msg);
       });
 
       this.socket.on('initial_analytics', (data: AnalyticsData[]) => {
         onInitialAnalytics(data);
-        console.log('Initial Analytics Data Received:', data);
+        log('info', 'Initial Analytics Data Received:', data);
       });
 
       this.socket.on('status_counts', (data: StatusCounts) => {
         onStatusCounts(data);
-        console.log('Status Counts Received:', data);
+        log('info', 'Status Counts Received:', data);
       });
 
       this.socket.on('data_update', (data: any) => {
@@ -45,20 +54,20 @@ class ApiService {
 
       this.socket.on('raw_pr_update', (data: PRData) => {
         onPRsUpdate(data);
-        console.log('Real-time Raw PR Data Received:', data);
+        log('info', 'Real-time Raw PR Data Received:', data);
       });
 
       this.socket.on('data_delete', (id: string) => {
         onDataDelete(id);
-        console.log('Data Delete Event Received for ID:', id);
+        log('info', 'Data Delete Event Received for ID:', id);
       });
 
       this.socket.on('disconnect', () => {
-        console.log('Disconnected from WebSocket server');
+        log('info', 'Disconnected from WebSocket server');
       });
 
       this.socket.on('connect_error', (err: any) => {
-        console.error('WebSocket connection error:', err);
+        log('error', 'WebSocket connection error:', err);
       });
     }
     return this.socket;

@@ -4,13 +4,22 @@ import { DashboardCard } from './DashboardCard';
 import { PRHeatmap } from './charts/PRHeatmap';
 import { MergeTimeChart } from './charts/MergeTimeChart';
 import { PRStateChart } from './charts/PRStateChart';
-import { VolumeChart } from './charts/VolumeChart';
 import { ContributorsChart } from './charts/ContributorsChart';
 import { GitPullRequest, Users, Clock, ExternalLink, User, Calendar, Loader2, BarChart, TrendingUp } from 'lucide-react';
-import { AnalyticsData, PRData, PRStateBreakdown, ContributorStats, VolumeData } from '../types';
+import { AnalyticsData, PRData, PRStateBreakdown, ContributorStats } from '../types';
 import { PRFeed } from './PRFeed';
 
 const REFRESH_INTERVAL = parseInt(import.meta.env.VITE_REFRESH_INTERVAL || '10000');
+
+// Add a simple logger utility at the top if not imported
+function log(level: 'info' | 'warn' | 'error' | 'debug', ...args: any[]) {
+  const timestamp = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+    `[${timestamp}] [${level.toUpperCase()}]`,
+    ...args
+  );
+}
 
 export const Dashboard: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData[]>([]);
@@ -22,7 +31,6 @@ export const Dashboard: React.FC = () => {
   // For real-time updates of specific charts that don't come via main analytics stream
   const [stateData, setStateData] = useState<PRStateBreakdown[]>([]);
   const [contributorsData, setContributorsData] = useState<ContributorStats[]>([]);
-  const [volumeData, setVolumeData] = useState<VolumeData[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [showPopUp, setShowPopUp] = useState<string | null>(null);
@@ -55,11 +63,16 @@ export const Dashboard: React.FC = () => {
             updatedData[existingIndex] = newPrsData;
             setShowPopUp('PR updated!');
             setTimeout(() => setShowPopUp(null), 3000);
+            log('info', 'PR updated:', newPrsData);
+            log('info', 'Current PR list after update:', updatedData);
             return updatedData;
           } else {
             setShowPopUp('New PR received!');
             setTimeout(() => setShowPopUp(null), 3000);
-            return [newPrsData, ...prevData];
+            log('info', 'New PR received:', newPrsData);
+            const newList = [newPrsData, ...prevData];
+            log('info', 'Current PR list after new PR:', newList);
+            return newList;
           }
         });
         setLatestPopUpPR(newPrsData);
@@ -67,19 +80,19 @@ export const Dashboard: React.FC = () => {
       // onInitialAnalytics (initial load of analytics data)
       (initialAnalytics: AnalyticsData[]) => {
         setAnalyticsData(initialAnalytics);
-        console.log("Initial Analytics Data Loaded via WebSocket:", initialAnalytics);
+        log('info', "Initial Analytics Data Loaded via WebSocket:", initialAnalytics);
       },
       // onStatusCounts (initial and updated counts)
       (counts: { raw_prs_count: number; analytics_count: number }) => {
         setRawPrsCount(counts.raw_prs_count);
         setAnalyticsCount(counts.analytics_count);
-        console.log("Status Counts Updated via WebSocket:", counts);
+        log('info', "Status Counts Updated via WebSocket:", counts);
       },
       // onDataDelete (delete event for analytics or PRs - handle as needed)
       (id: string) => {
-        setPrsData(prevData => prevData.filter((pr: PRData) => pr.id !== id));
-        setAnalyticsData(prevData => prevData.filter((item: AnalyticsData) => String(item._id) !== id));
-        console.log("Document with ID deleted:", id);
+        setPrsData((prevData: PRData[]) => prevData.filter((pr: PRData) => pr.id !== id));
+        setAnalyticsData((prevData: AnalyticsData[]) => prevData.filter((item: AnalyticsData) => String(item._id) !== id));
+        log('info', "Document with ID deleted:", id);
       }
     );
 
@@ -87,7 +100,7 @@ export const Dashboard: React.FC = () => {
     if (socket) {
       socket.on('initial_prs', (initialPRs: PRData[]) => {
         setPrsData(initialPRs);
-        console.log('Initial PRs Data Loaded via WebSocket:', initialPRs);
+        log('info', 'Initial PRs Data Loaded via WebSocket:', initialPRs);
       });
     }
 
