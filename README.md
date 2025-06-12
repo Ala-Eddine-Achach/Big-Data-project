@@ -43,17 +43,18 @@ This mini-project demonstrates a modern **Big Data pipeline** that ingests, stor
 
 ## 🔁 Data Flow Diagram
 
-```mermaid
-flowchart TD
-    A[GitHub PR Producer (Python)] --PR JSON--> B(Kafka Broker)
-    B --stream--> C[Kafka Consumer (Python)]
-    C --raw PRs--> D[MongoDB (raw_prs collection)]
-    D --batch read--> E[Spark Batch Job]
-    E --analytics--> F[MongoDB (analytics collection)]
-    D & F --change streams--> G[Flask-SocketIO API]
-    G --WebSocket/REST--> H[React Dashboard]
-```
+```mermaid 
 
+flowchart TD
+    Producer --> Kafka
+    Kafka --> Consumer
+    Consumer --> MongoDB_Raw
+    MongoDB_Raw --> Spark
+    Spark --> MongoDB_Analytics
+    MongoDB_Analytics --> API
+    MongoDB_Raw --> API
+    API --> Dashboard
+    
 ---
 
 ## 📦 Containerized Architecture
