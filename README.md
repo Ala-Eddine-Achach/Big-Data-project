@@ -43,8 +43,7 @@ This mini-project demonstrates a modern **Big Data pipeline** that ingests, stor
 
 ## 🔁 Data Flow Diagram
 
-```mermaid 
-
+```mermaid
 flowchart TD
     Producer --> Kafka
     Kafka --> Consumer
@@ -54,8 +53,7 @@ flowchart TD
     MongoDB_Analytics --> API
     MongoDB_Raw --> API
     API --> Dashboard
-    
----
+```
 
 ## 📦 Containerized Architecture
 
